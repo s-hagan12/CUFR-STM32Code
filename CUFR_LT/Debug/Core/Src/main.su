@@ -1,0 +1,13 @@
+../Core/Src/main.c:106:6:myprintf	16	static
+../Core/Src/main.c:118:5:acdm55	24	static
+../Core/Src/main.c:169:6:configure_sd	32	static
+../Core/Src/main.c:264:5:process_line	40	static
+../Core/Src/main.c:281:6:get_msg_type_details	24	static
+../Core/Src/main.c:333:5:main	1672	dynamic
+../Core/Src/main.c:622:6:SystemClock_Config	160	static
+../Core/Src/main.c:670:13:MX_CAN_Init	8	static
+../Core/Src/main.c:707:13:MX_SPI2_Init	8	static
+../Core/Src/main.c:747:13:MX_USART1_UART_Init	8	static
+../Core/Src/main.c:782:13:MX_USART2_UART_Init	8	static
+../Core/Src/main.c:817:13:MX_GPIO_Init	48	static
+../Core/Src/main.c:867:6:Error_Handler	4	static,ignoring_inline_asm
