@@ -84,6 +84,9 @@ uint8_t CMD8_Response [7];
 uint8_t CMD55_Response [2];
 uint8_t ACMD41_Response [2];
 int count = 0;
+
+CAN_RxHeaderTypeDef   RxHeader;
+uint8_t               RxData[8];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -368,6 +371,30 @@ int main(void)
   FATFS FatFs; 	//Fatfs handle
   FIL fil; 		//File handle
   FRESULT fres; //Result after operations
+
+  //Set Up CAN
+  CAN_FilterTypeDef canfilterconfig;
+  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
+  canfilterconfig.FilterBank = 8;  // which filter bank to use from the assigned ones
+  canfilterconfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+  canfilterconfig.FilterIdHigh = 0x446<<5;
+  canfilterconfig.FilterIdLow = 0;
+  canfilterconfig.FilterMaskIdHigh = 0x0000;
+  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  canfilterconfig.SlaveStartFilterBank = 14;  // how many filters to assign to the CAN1 (master can)
+
+  HAL_CAN_ConfigFilter(&hcan, &canfilterconfig);
+  HAL_StatusTypeDef ret = HAL_CAN_Start(&hcan);
+  if(ret != HAL_OK){
+  	  myprintf("\rinit error\r\n\r\n");
+    }
+    else
+    {
+  	  myprintf("\rinitialised\r\n\r\n");
+    }
+
   //Open the file system
   myprintf("\r\nInitialising SD CARD\r\n\r\n");
   int init_tries = 0;
@@ -428,32 +455,31 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  CAN_RxHeaderTypeDef   RxHeader;
-  uint8_t               RxData[8];
 
   //remove once CAN works
-  filename = "fake_can.bin";
-  fres = f_open(&fil, filename, FA_READ);
-	if (fres != FR_OK) {
-		myprintf("f_open error (%i)\r\n", fres);
-		myprintf("unable to open fake messages file");
-	}
-	else{
-		myprintf("Msg File opened!\r\n");
-	}
+//  filename = "fake_can.bin";
+//  fres = f_open(&fil, filename, FA_READ);
+//	if (fres != FR_OK) {
+//		myprintf("f_open error (%i)\r\n", fres);
+//		myprintf("unable to open fake messages file");
+//	}
+//	else{
+//		myprintf("Msg File opened!\r\n");
+//	}
+//
+//    //get number of messages
+//    fres = f_read(&fil, buffer, 1, &bytes_read);
+//    if(bytes_read == 0) {
+//  	myprintf("f_read error (%i)\r\n", fres);
+//    }
+//    uint8_t num_csv_msgs = buffer[0];
+//    myprintf("num messages: %u\r\n", num_csv_msgs);
 
-    //get number of messages
-    fres = f_read(&fil, buffer, 1, &bytes_read);
-    if(bytes_read == 0) {
-  	myprintf("f_read error (%i)\r\n", fres);
-    }
-    uint8_t num_csv_msgs = buffer[0];
-    myprintf("num messages: %u\r\n", num_csv_msgs);
-
-    int msg_ctr = 0;
+    //int msg_ctr = 0;
     struct can_msg msg_type;
     struct can_msg null_msg;
     null_msg.id = 0;
+    uint32_t fill_level = 0;
 
     uint32_t stat_last_time = HAL_GetTick();
     uint32_t fast_last_time = HAL_GetTick();
@@ -489,89 +515,100 @@ int main(void)
 	  //	  	  - send med
 	  //	  	  repeat;
 
-	  myprintf("Next msg\r\n");
-	  fres = f_read(&fil, buffer, 16, &bytes_read);
-	  if(bytes_read == 0) {
-		myprintf("f_read error (%i)\r\n", fres);
-	  }
+//	  myprintf("Next msg\r\n");
+//	  fres = f_read(&fil, buffer, 16, &bytes_read);
+//	  if(bytes_read == 0) {
+//		myprintf("f_read error (%i)\r\n", fres);
+//	  }
+//
+//	  RxHeader.StdId = 0;
+//	  RxHeader.StdId |= buffer[0] << 24;
+//	  RxHeader.StdId |= buffer[1] << 16;
+//	  RxHeader.StdId |= buffer[2] << 8;
+//	  RxHeader.StdId |= buffer[3];
+//
+//	  RxHeader.DLC = 0;
+//	  RxHeader.DLC |= buffer[4] << 24;
+//	  RxHeader.DLC |= buffer[5] << 16;
+//	  RxHeader.DLC |= buffer[6] << 8;
+//	  RxHeader.DLC |= buffer[7];
+//
+//	  for(int idx = 0; idx<RxHeader.DLC; idx++){
+//		 RxData[idx] = buffer[8+idx];
+//	  }
+//
+//	  myprintf("(%x) (%i) ", RxHeader.StdId, RxHeader.DLC);
+//	  for(int idx = 0; idx<RxHeader.DLC; idx++){
+//		  myprintf("(%x)", RxData[idx]);
+//	  	  }
+//	  myprintf("\r\n");
 
-	  RxHeader.StdId = 0;
-	  RxHeader.StdId |= buffer[0] << 24;
-	  RxHeader.StdId |= buffer[1] << 16;
-	  RxHeader.StdId |= buffer[2] << 8;
-	  RxHeader.StdId |= buffer[3];
+	  fill_level = HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO0);
+	  if(fill_level !=0){
+		 if (HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+		 {
+				 myprintf("No msg found\r\n\r\n");
+		  }else {
 
-	  RxHeader.DLC = 0;
-	  RxHeader.DLC |= buffer[4] << 24;
-	  RxHeader.DLC |= buffer[5] << 16;
-	  RxHeader.DLC |= buffer[6] << 8;
-	  RxHeader.DLC |= buffer[7];
+		  //Check which message was received
+		  	  msg_type = null_msg;
+		  	  for(int idx =0; idx<num_msgs; idx++){
+		  		  if(RxHeader.StdId == table[idx].id){
+		  			  msg_type = table[idx];
+		  			  break;
+		  		  }
+		  	  }
 
-	  for(int idx = 0; idx<RxHeader.DLC; idx++){
-		 RxData[idx] = buffer[8+idx];
-	  }
+		  	  if(msg_type.id != 0)
+		  	  {
+		  		  myprintf("(%x) (%c)\r\n", msg_type.id, msg_type.pkt);
+		  	  }
+		  	  else{
+		  		  myprintf("Corresponding message not found\r\n");
+		  	  }
 
-	  myprintf("(%x) (%i) ", RxHeader.StdId, RxHeader.DLC);
-	  for(int idx = 0; idx<RxHeader.DLC; idx++){
-		  myprintf("(%x)", RxData[idx]);
-	  	  }
-	  myprintf("\r\n");
+		  	  curr_pkt = NULL;
 
-	  //Check which message was received
-	  msg_type = null_msg;
-	  for(int idx =0; idx<num_msgs; idx++){
-		  if(RxHeader.StdId == table[idx].id){
-			  msg_type = table[idx];
-			  break;
+		  	  //Sets the curr_pkt pointer to the correct packet
+		  	  if(msg_type.pkt == fast.id)
+		  	  {
+		  		  curr_pkt = fast_pkt;
+		  	  } else if(msg_type.pkt == med.id){
+		  		  curr_pkt = med_pkt;
+		  	  } else if(msg_type.pkt == stat.id){
+		  		  curr_pkt = stat_pkt;
+		  	  }
+
+		  	  //Check if the stat_pkt has changed
+		  	  if(msg_type.pkt == stat.id){
+		  		  for(int idx = 0; idx<msg_type.lts; idx++){
+		  			  if(curr_pkt[msg_type.start+idx] != stat_pkt_last[idx])
+		  			  {
+		  				  send_stat = 1;
+		  				  myprintf("Stat changed!!\r\n");
+		  			  }
+		  		  }
+		  	  }
+
+		  	  //Marks the set bit
+		  	  if(curr_pkt != NULL && msg_type.idx < 8){
+		  		  curr_pkt[1] |= 1U << (7-msg_type.idx);
+		  		  //myprintf("1(%u)\r\n", curr_pkt[1]);
+		  	  } else if (curr_pkt != NULL){
+		  		  curr_pkt[2] |= 1U << (15-msg_type.idx);
+		  		  //myprintf("2(%u)\r\n", curr_pkt[2]);
+		  	  }
+
+		  	  //Adds the message's data to the packet
+		  	  if(curr_pkt != NULL){
+		  		  for(int idx = 0; idx<msg_type.lts; idx++){
+		  			  curr_pkt[msg_type.start+idx] = RxData[idx];
+		  		  }
+		  	  }
 		  }
 	  }
 
-	  if(msg_type.id != 0)
-	  {
-		  myprintf("(%x) (%c)\r\n", msg_type.id, msg_type.pkt);
-	  }
-	  else{
-		  myprintf("Corresponding message not found\r\n");
-	  }
 
-	  curr_pkt = NULL;
-
-	  //Sets the curr_pkt pointer to the correct packet
-	  if(msg_type.pkt == fast.id)
-	  {
-		  curr_pkt = fast_pkt;
-	  } else if(msg_type.pkt == med.id){
-		  curr_pkt = med_pkt;
-	  } else if(msg_type.pkt == stat.id){
-		  curr_pkt = stat_pkt;
-	  }
-
-	  //Check if the stat_pkt has changed
-	  if(msg_type.pkt == stat.id){
-		  for(int idx = 0; idx<msg_type.lts; idx++){
-			  if(curr_pkt[msg_type.start+idx] != stat_pkt_last[idx])
-			  {
-				  send_stat = 1;
-				  myprintf("Stat changed!!\r\n");
-			  }
-		  }
-	  }
-
-	  //Marks the set bit
-	  if(curr_pkt != NULL && msg_type.idx < 8){
-		  curr_pkt[1] |= 1U << (7-msg_type.idx);
-		  //myprintf("1(%u)\r\n", curr_pkt[1]);
-	  } else if (curr_pkt != NULL){
-		  curr_pkt[2] |= 1U << (15-msg_type.idx);
-		  //myprintf("2(%u)\r\n", curr_pkt[2]);
-	  }
-
-	  //Adds the message's data to the packet
-	  if(curr_pkt != NULL){
-		  for(int idx = 0; idx<msg_type.lts; idx++){
-			  curr_pkt[msg_type.start+idx] = RxData[idx];
-		  }
-	  }
 
 	  //Checks which messages to send
 	  curr_time = HAL_GetTick();
@@ -609,13 +646,13 @@ int main(void)
 	  }
 
 	  //Remove once CAN works
-	  	  msg_ctr++;
-	  	  if(msg_ctr == num_csv_msgs)
-	  	  {
-	  		msg_ctr = 0;
-	  		fres = f_lseek(&fil, 1);
-	  	  }
-	  	  HAL_Delay(1000);
+//	  	  msg_ctr++;
+//	  	  if(msg_ctr == num_csv_msgs)
+//	  	  {
+//	  		msg_ctr = 0;
+//	  		fres = f_lseek(&fil, 1);
+//	  	  }
+//	  	  HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -686,11 +723,11 @@ static void MX_CAN_Init(void)
 
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 16;
+  hcan.Init.Prescaler = 9;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
